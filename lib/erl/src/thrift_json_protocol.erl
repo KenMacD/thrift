@@ -356,7 +356,10 @@ expect(#json_protocol{jsx={event, {Type, Data}=Ev, Next}}=State, ExpectedType) -
     end;
 
 expect(#json_protocol{jsx={event, Event, Next}}=State, ExpectedEvent) ->
-     expect(State#json_protocol{jsx={event, {Event, none}, Next}}, ExpectedEvent).
+    expect(State#json_protocol{jsx={event, {Event, none}, Next}}, ExpectedEvent);
+
+expect(#json_protocol{jsx={incomplete, _Jsx}}=State, _ExpectedEvent) ->
+    {State, {error, eof}}.
 
 convert_data(integer, I) -> list_to_integer(I);
 convert_data(float, F) -> list_to_float(F);
