@@ -372,7 +372,7 @@ expect_many_1(State, [Expected|ExpTail], ResultList, _PrevStatus) ->
     NewResultList = [Data|ResultList],
     case Status of
         % in case of error, end prematurely
-        error -> expect_many_1(State1, [], NewResultList, Status);
+        error -> {State, {Status, Data}};
         ok -> expect_many_1(State1, ExpTail, NewResultList, Status)
     end.
 
@@ -428,7 +428,7 @@ read(This0, field_begin) ->
             {This1, #protocol_field_begin{
                 type = json_to_typeid(FieldType), 
                 id = list_to_integer(FieldIdStr)}}; % TODO: do we need to wrap this in a try/catch?
-        {error,[{unexpected_json_event, {end_object,none}}]} ->
+        {error,{unexpected_json_event, {end_object,none}}} ->
             {This1, #protocol_field_begin{type = ?tType_STOP}};
         Other -> 
             io:format("**** OTHER branch selected ****"),
