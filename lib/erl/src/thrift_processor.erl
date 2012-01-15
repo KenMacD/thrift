@@ -24,17 +24,27 @@
 -include("thrift_constants.hrl").
 -include("thrift_protocol.hrl").
 
--record(thrift_processor, {handler, protocol, service}).
+-record(thrift_processor, {handler, inprotocol, outprotocol, service}).
+
+init({_Server, InProtoGen, OutProtoGen, Service, Handler}) ->
+    InProto = InProtoGen(),
+    OutProto = OutProtoGen(),
+    loop(#thrift_processor{inprotocol = InProto,
+                           outprotocol = OutProto,
+                           service = Service,
+                           handler = Handler});
 
 init({_Server, ProtoGen, Service, Handler}) when is_function(ProtoGen, 0) ->
     {ok, Proto} = ProtoGen(),
-    loop(#thrift_processor{protocol = Proto,
+    loop(#thrift_processor{inprotocol = Proto,
+                           outprotocol = Proto,
                            service = Service,
                            handler = Handler}).
 
-loop(State0 = #thrift_processor{protocol  = Proto0}) ->
+loop(State0 = #thrift_processor{inprotocol  = Proto0,
+                                outprotocol = OutProto}) ->
     {Proto1, MessageBegin} = thrift_protocol:read(Proto0, message_begin),
-    State1 = State0#thrift_processor{protocol = Proto1},
+    State1 = State0#thrift_processor{inprotocol = Proto1},
     case MessageBegin of
         #protocol_message_begin{name = Function,
                                 type = ?tMessageType_CALL,
@@ -46,16 +56,22 @@ loop(State0 = #thrift_processor{protocol  = Proto0}) ->
                                 seqid = Seqid} ->
             {State2, ok} = handle_function(State1, list_to_atom(Function), Seqid),
             loop(State2);
+        {error, eof} ->
+            thrift_protocol:close_transport(Proto1),
+            {OutProto, ok};
+        {error, no_binary_protocol_version} -> % TODO: have binary protocol return EOF?
+            thrift_protocol:close_transport(Proto1),
+            {OutProto, ok};
         {error, timeout} ->
             thrift_protocol:close_transport(Proto1),
-            ok;
+            {OutProto, ok};
         {error, closed} ->
             %% error_logger:info_msg("Client disconnected~n"),
             thrift_protocol:close_transport(Proto1),
-            exit(shutdown)
+            {OutProto, {error, closed}}
     end.
 
-handle_function(State0=#thrift_processor{protocol = Proto0,
+handle_function(State0=#thrift_processor{inprotocol = Proto0,
                                          handler = Handler,
                                          service = Service},
                 Function,
@@ -63,7 +79,7 @@ handle_function(State0=#thrift_processor{protocol = Proto0,
     InParams = Service:function_info(Function, params_type),
 
     {Proto1, {ok, Params}} = thrift_protocol:read(Proto0, InParams),
-    State1 = State0#thrift_processor{protocol = Proto1},
+    State1 = State0#thrift_processor{inprotocol = Proto1},
 
     try
         Result = Handler:handle_function(Function, Params),
@@ -174,7 +190,7 @@ handle_error(State, Function, Error, Seqid) ->
                 type = ?TApplicationException_UNKNOWN}},
     send_reply(State, Function, ?tMessageType_EXCEPTION, Reply, Seqid).
 
-send_reply(State = #thrift_processor{protocol = Proto0}, Function, ReplyMessageType, Reply, Seqid) ->
+send_reply(State = #thrift_processor{outprotocol = Proto0}, Function, ReplyMessageType, Reply, Seqid) ->
     {Proto1, ok} = thrift_protocol:write(Proto0, #protocol_message_begin{
                                            name = atom_to_list(Function),
                                            type = ReplyMessageType,
@@ -182,4 +198,4 @@ send_reply(State = #thrift_processor{protocol = Proto0}, Function, ReplyMessageT
     {Proto2, ok} = thrift_protocol:write(Proto1, Reply),
     {Proto3, ok} = thrift_protocol:write(Proto2, message_end),
     {Proto4, ok} = thrift_protocol:flush_transport(Proto3),
-    {State#thrift_processor{protocol = Proto4}, ok}.
+    {State#thrift_processor{outprotocol = Proto4}, ok}.
