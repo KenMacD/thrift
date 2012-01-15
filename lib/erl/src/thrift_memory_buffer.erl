@@ -49,17 +49,26 @@ new_transport_factory() ->
 write(State = #memory_buffer{buffer = Buf}, Data) ->
     {State#memory_buffer{buffer = [Buf, Data]}, ok}.
 
-flush(State = #memory_buffer {buffer = Buf}) ->
-    {State#memory_buffer{buffer = []}, Buf}.
+flush(State = #memory_buffer{}) ->
+    {State, ok}.
 
 close(State) ->
     {State, ok}.
 
-read(State = #memory_buffer{buffer = Buf}, Len) when is_integer(Len) ->
+% return <<>> on 0 read to match file:read
+read(State = #memory_buffer{}, 0) ->
+    {State, {ok, <<>>}};
+
+read(State = #memory_buffer{buffer = Buf}, Len) when is_integer(Len), Len > 0 ->
     Binary = iolist_to_binary(Buf),
-    Give = min(iolist_size(Binary), Len),
-    {Result, Remaining} = split_binary(Binary, Give),
-    {State#memory_buffer{buffer = Remaining}, {ok, Result}}.
+    case iolist_size(Binary) of
+        0 ->
+            {State, eof};
+        _ ->
+            Give = min(size(Binary), Len),
+            {Result, Remaining} = split_binary(Binary, Give),
+            {State#memory_buffer{buffer = Remaining}, {ok, Result}}
+    end.
 
 %%--------------------------------------------------------------------
 %% Internal functions

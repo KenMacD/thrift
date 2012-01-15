@@ -89,27 +89,19 @@ encode_decode_4_test() ->
 
   TestData = Result.
 
-encode_decode_5_test() ->
-  % test writing to a buffer, getting the bytes out, putting them
-  % in a new buffer and reading them
+read_test() ->
+  {ok, Transport0} = thrift_memory_buffer:new(<<"abcdef">>),
 
-  % here's the writing part
-  {ok, Transport0} = thrift_memory_buffer:new(),
-  {ok, Protocol0} = thrift_binary_protocol:new(Transport0),
-  TestData = test_data(),
-  {Protocol1, ok} = thrift_protocol:write(Protocol0,
-    {{struct, element(2, thriftTest_types:struct_info('xtruct'))},
-      TestData}),
-  % flush now returns the buffer
-  {_Protocol2, Buf} = thrift_protocol:flush_transport (Protocol1),
+  % normal read
+  {Transport1, {ok, <<"abcd">>}} = thrift_transport:read(Transport0, 4),
 
-  % now the reading part
-  {ok, T2} = thrift_memory_buffer:new (Buf),
-  {ok, P2} = thrift_binary_protocol:new(T2),
-  {_, {ok, Result}} = thrift_protocol:read(P2,
-    {struct, element(2, thriftTest_types:struct_info('xtruct'))},
-    'xtruct'),
+  % short read
+  {Transport2, {ok, <<"ef">>}} = thrift_transport:read(Transport1, 4),
 
-  Result = TestData.
+  % eof now, but zero read should work (to match file:read)
+  {_Transport3, {ok, <<>>}} = thrift_transport:read(Transport2, 0),
+
+  % eof again, but attempted read results in eof
+  {_Transport4, eof} = thrift_transport:read(Transport2, 4). %T2 again
 
 -endif.
