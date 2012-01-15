@@ -24,6 +24,7 @@
 
 -spec flush_transport(state()) -> {state(), ok | {error, _Reason}}.
 -spec close_transport(state()) -> {state(), ok | {error, _Reason}}.
+-spec get_transport(state()) -> {ok, any()} | {error, _Reason}.
 
 -spec write(state(), any()) -> {state(), ok | {error, _Reason}}.
 

@@ -26,6 +26,7 @@
          skip/2,
          flush_transport/1,
          close_transport/1,
+         get_transport/1,
          typeid_to_atom/1
         ]).
 
@@ -41,7 +42,8 @@ behaviour_info(callbacks) ->
      {read, 2},
      {write, 2},
      {flush_transport, 1},
-     {close_transport, 1}
+     {close_transport, 1},
+     {get_transport, 1}
     ];
 behaviour_info(_Else) -> undefined.
 
@@ -59,6 +61,12 @@ flush_transport(Proto = #protocol{module = Module,
 close_transport(#protocol{module = Module,
                           data = Data}) ->
     Module:close_transport(Data).
+
+-spec get_transport(#protocol{}) -> ok.
+get_transport(#protocol{module = Module,
+                          data = Data}) ->
+    Module:get_transport(Data).
+
 
 typeid_to_atom(?tType_STOP) -> field_stop;
 typeid_to_atom(?tType_VOID) -> void;

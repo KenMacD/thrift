@@ -32,6 +32,7 @@
          write/2,
          flush_transport/1,
          close_transport/1,
+         get_transport/1,
          new_protocol_factory/2
         ]).
 
@@ -105,6 +106,9 @@ close_transport(This = #json_protocol{transport = Transport}) ->
             context_stack = [],
             jsx = undefined
         }, Result}.
+
+get_transport(This = #json_protocol{transport = Transport}) ->
+  {ok, Transport}.
 
 %%%
 %%% instance methods
@@ -339,6 +343,8 @@ read_all_1(Transport0, IoList) ->
         {ok, Data} -> % character successfully read; read more
             read_all_1(Transport1, [Data|IoList]);
         {error, 'EOF'} -> % we're done
+            {Transport1, iolist_to_binary(lists:reverse(IoList))};
+        eof ->
             {Transport1, iolist_to_binary(lists:reverse(IoList))}
     end.
 

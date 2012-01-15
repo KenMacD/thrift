@@ -29,7 +29,7 @@
          write/2,
          flush_transport/1,
          close_transport/1,
-
+         get_transport/1,
          new_protocol_factory/2
         ]).
 
@@ -67,6 +67,10 @@ flush_transport(This = #binary_protocol{transport = Transport}) ->
 close_transport(This = #binary_protocol{transport = Transport}) ->
     {NewTransport, Result} = thrift_transport:close(Transport),
     {This#binary_protocol{transport = NewTransport}, Result}.
+
+get_transport(This = #binary_protocol{transport = Transport}) ->
+    {ok, Transport}.
+
 
 %%%
 %%% instance methods
