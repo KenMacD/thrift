@@ -338,6 +338,8 @@ read_all_1(Transport0, IoList) ->
             {Transport1, iolist_to_binary(lists:reverse(IoList))};
         {ok, Data} -> % character successfully read; read more
             read_all_1(Transport1, [Data|IoList]);
+        {error, eof} ->
+            {Transport1, iolist_to_binary(lists:reverse(IoList))};
         {error, 'EOF'} -> % we're done
             {Transport1, iolist_to_binary(lists:reverse(IoList))}
     end.
