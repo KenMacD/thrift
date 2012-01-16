@@ -19,12 +19,21 @@
 
 -module(thrift_processor).
 
--export([init/1]).
+-export([once/1, init/1]).
 
 -include("thrift_constants.hrl").
 -include("thrift_protocol.hrl").
 
 -record(thrift_processor, {handler, protocol, service}).
+
+once({Proto, Service, Handler}) ->
+    Processor = #thrift_processor{protocol = Proto,
+                                  service = Service,
+                                  handler = Handler},
+    case process_one(Processor) of
+        {_State, ok} -> ok;
+        {_State, {error, _Reason} = Error} -> Error
+    end.
 
 init({_Server, ProtoGen, Service, Handler}) when is_function(ProtoGen, 0) ->
     {ok, Proto} = ProtoGen(),
@@ -32,7 +41,20 @@ init({_Server, ProtoGen, Service, Handler}) when is_function(ProtoGen, 0) ->
                            service = Service,
                            handler = Handler}).
 
-loop(State0 = #thrift_processor{protocol  = Proto0}) ->
+loop(State0 = #thrift_processor{}) ->
+    case process_one(State0) of
+        {State1, ok} ->
+            loop(State1);
+        {State1, {error, timeout}} ->
+            thrift_protocol:close_transport(State1#thrift_processor.protocol),
+            ok;
+        {State1, {error, closed}} ->
+            %% error_logger:info_msg("Client disconnected~n"),
+            thrift_protocol:close_transport(State1#thrift_processor.protocol),
+            exit(shutdown)
+    end.
+
+process_one(State0 = #thrift_processor{protocol  = Proto0}) ->
     {Proto1, MessageBegin} = thrift_protocol:read(Proto0, message_begin),
     State1 = State0#thrift_processor{protocol = Proto1},
     case MessageBegin of
@@ -40,19 +62,14 @@ loop(State0 = #thrift_processor{protocol  = Proto0}) ->
                                 type = ?tMessageType_CALL,
                                 seqid = Seqid} ->
             {State2, ok} = handle_function(State1, list_to_atom(Function), Seqid),
-            loop(State2);
+            {State2, ok};
         #protocol_message_begin{name = Function,
                                 type = ?tMessageType_ONEWAY, 
                                 seqid = Seqid} ->
             {State2, ok} = handle_function(State1, list_to_atom(Function), Seqid),
-            loop(State2);
-        {error, timeout} ->
-            thrift_protocol:close_transport(Proto1),
-            ok;
-        {error, closed} ->
-            %% error_logger:info_msg("Client disconnected~n"),
-            thrift_protocol:close_transport(Proto1),
-            exit(shutdown)
+            {State2, ok};
+        {error, Reason} ->
+            {State1, {error, Reason}}
     end.
 
 handle_function(State0=#thrift_processor{protocol = Proto0,
